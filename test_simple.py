@@ -127,10 +127,10 @@ def test_simple(args):
 
             # PREDICTION
             input_image = input_image.to(device)
-            torch.onnx.export(encoder, input_image, "encoder.onnx")
+            torch.onnx.export(encoder, input_image, "./models/encoder.onnx")
             #summary(encoder, (3, feed_width, feed_height))
             features = encoder(input_image)
-            torch.onnx.export(depth_decoder, features, "decoder.onnx")
+            torch.onnx.export(depth_decoder, features, "./models/decoder.onnx")
             outputs = depth_decoder(features)
             #print(outputs)
 
