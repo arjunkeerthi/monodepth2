@@ -14,14 +14,18 @@ import numpy as np
 import PIL.Image as pil
 import matplotlib as mpl
 import matplotlib.cm as cm
+import time
 
 import torch
 from torchvision import transforms, datasets
+from torchsummary import summary
+
+import torch.onnx
+import onnx
 
 import networks
 from layers import disp_to_depth
 from utils import download_model_if_doesnt_exist
-
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -79,6 +83,7 @@ def test_simple(args):
     encoder.load_state_dict(filtered_dict_enc)
     encoder.to(device)
     encoder.eval()
+    #print(encoder)
 
     print("   Loading pretrained decoder")
     depth_decoder = networks.DepthDecoder(
@@ -108,6 +113,8 @@ def test_simple(args):
     with torch.no_grad():
         for idx, image_path in enumerate(paths):
 
+            start_time = time.time()
+
             if image_path.endswith("_disp.jpg"):
                 # don't try to predict disparity for a disparity image!
                 continue
@@ -120,12 +127,16 @@ def test_simple(args):
 
             # PREDICTION
             input_image = input_image.to(device)
+            torch.onnx.export(encoder, input_image, "encoder.onnx")
+            #summary(encoder, (3, feed_width, feed_height))
             features = encoder(input_image)
+            torch.onnx.export(depth_decoder, features, "decoder.onnx")
             outputs = depth_decoder(features)
+            #print(outputs)
 
-            disp = outputs[("disp", 0)]
+            disp = outputs#outputs[("disp", 0)]
             disp_resized = torch.nn.functional.interpolate(
-                disp, (original_height, original_width), mode="bilinear", align_corners=False)
+                disp, (original_height, original_width), mode="nearest")#, align_corners=False)
 
             # Saving numpy file
             output_name = os.path.splitext(os.path.basename(image_path))[0]
@@ -146,6 +157,18 @@ def test_simple(args):
 
             print("   Processed {:d} of {:d} images - saved prediction to {}".format(
                 idx + 1, len(paths), name_dest_im))
+
+            print(f"Time: {time.time() - start_time} seconds")
+
+    #print("Encoder model onnx")
+    #encoder_model = onnx.load("encoder.onnx")
+    #onnx.checker.check_model(encoder_model)
+    #print(onnx.helper.printable_graph(encoder_model.graph))
+
+    #print("Depth decoder onnx")
+    #decoder_model = onnx.load("decoder.onnx")
+    #onnx.checker.check_model(decoder_model)
+    #print(onnx.helper.printable_graph(decoder_model.graph))
 
     print('-> Done!')
 
